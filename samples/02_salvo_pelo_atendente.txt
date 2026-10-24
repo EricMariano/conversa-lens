@@ -1,0 +1,7 @@
+Cliente: Fui cobrado DUAS vezes na fatura deste mês. Isso é um absurdo, quero meu dinheiro de volta.
+Atendente: Sinto muito por isso, João. Cobrança em dobro é um erro nosso e vou resolver agora com você.
+Cliente: Espero mesmo, porque da última vez demorou um mês.
+Atendente: Já localizei as duas cobranças de R$ 89,90. Registrei o estorno da duplicada agora; o crédito aparece na sua fatura em até 48 horas. Vou enviar o comprovante para o e-mail joao.pereira@exemplo.com.
+Cliente: Ah, recebi aqui o e-mail. Bem mais rápido do que eu esperava.
+Atendente: Que bom! Também deixei uma observação para isso não se repetir na próxima fatura. Posso ajudar em mais alguma coisa?
+Cliente: Não, era só isso. Obrigado, resolveu de verdade.

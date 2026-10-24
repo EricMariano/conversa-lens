@@ -1,0 +1,13 @@
+Cliente: Oi, boa tarde. Minha internet está oscilando desde ontem, caindo a cada meia hora mais ou menos.
+Atendente: Boa tarde! Pode me informar o CPF do titular?
+Cliente: Claro, 123.456.789-09. Meu nome é Mariana Souza.
+Atendente: Obrigado, Mariana. Já tentou reiniciar o modem?
+Cliente: Já, várias vezes. Continua caindo.
+Atendente: Conforme o procedimento, preciso que a senhora desligue o modem da tomada por 5 minutos e aguarde.
+Cliente: Eu já fiz isso ontem com outro atendente. É a terceira vez que eu ligo pelo mesmo problema.
+Atendente: Entendo, mas sem esse teste não é possível abrir chamado técnico. É a política da empresa.
+Cliente: Isso é um descaso!! Eu trabalho de casa e estou perdendo reunião. Ninguém resolve nada.
+Atendente: A senhora deveria ter verificado a instabilidade na área pelo aplicativo antes de ligar.
+Cliente: Quero cancelar. Vou pedir portabilidade para outra operadora e registrar no Reclame Aqui.
+Atendente: Posso transferir para o setor de retenção.
+Cliente: Não precisa. Só quero o protocolo do cancelamento.

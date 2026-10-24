@@ -1,0 +1,7 @@
+Cliente: Meu pedido era para chegar segunda. Hoje é sexta e o rastreio continua parado.
+Atendente: Olá! Vou verificar. O prazo de entrega é de até 10 dias úteis, conforme a política de envio.
+Cliente: Na compra estava escrito 3 dias.
+Atendente: Infelizmente não é possível alterar o prazo da transportadora. Aguarde a atualização do rastreio.
+Cliente: Ótimo. Maravilha. Mais uma vez esperando sem nenhuma previsão. Excelente atendimento, parabéns.
+Atendente: Obrigado pelo elogio! Posso ajudar em algo mais?
+Cliente: Quero falar com um supervisor.

@@ -1,0 +1,24 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+.env
+.env.*
+!.env.example
+.ipynb_checkpoints/
+.DS_Store
+
+
+# Dados públicos baixados pelos benchmarks
+benchmarks/data/
+benchmarks/results/*.jsonl
+csat_model.json
+
+# Configuração local do Claude Code (caminhos da máquina)
+.claude/

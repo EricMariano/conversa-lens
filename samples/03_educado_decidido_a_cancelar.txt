@@ -1,0 +1,7 @@
+Cliente: Olá, tudo bem? Gostaria de cancelar meu plano, por favor.
+Atendente: Olá! Tudo ótimo. Posso saber o motivo?
+Cliente: O serviço sempre foi bom, não tenho reclamação. Só encontrei um plano mais barato em outra empresa.
+Atendente: Entendo. Posso te oferecer 30% de desconto por 6 meses para você continuar com a gente.
+Cliente: Agradeço a oferta, de verdade, mas já decidi. Prefiro encerrar mesmo.
+Atendente: Tudo bem. O cancelamento foi registrado e você recebe a confirmação por SMS no (11) 98765-4321.
+Cliente: Perfeito, obrigado pela atenção.
