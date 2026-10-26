@@ -24,6 +24,7 @@ from conversa_lens.providers import (
     make_csat_estimator,
     make_summarizer,
 )
+from conversa_lens.summarize import SummaryUnavailable
 
 load_dotenv()
 ROOT = Path(__file__).parent
@@ -61,16 +62,41 @@ known_names = [n for n in names.split(",") if n.strip()]
 
 def run_analysis(turns: list[Turn]) -> tuple[AnalysisState, TurnClassifier]:
     classifier = make_classifier(offline)
+    # Sem resumidor aqui: o grafo devolve tudo do Jev em ~1 s, e o resumo do LLM é escrito
+    # depois, na tela, enquanto a pessoa já lê a curva e os alertas.
     with st.spinner(f"Lendo {len(turns)} turnos com {classifier.name}…"):
         state = analyze(
-            turns,
-            classifier,
-            make_summarizer(offline),
-            known_names,
-            make_csat_estimator(offline),
-            csat_model,
+            turns, classifier, None, known_names, make_csat_estimator(offline), csat_model
         )
     return state, classifier
+
+
+def llm_summary(state: AnalysisState, key: str) -> None:
+    """Escreve o resumo do LLM aos pedaços; guarda o texto para não pagar de novo a cada clique."""
+    summary, dyn = state["summary"], state["dynamics"]
+    llm = make_summarizer(offline) if dyn.key_turns else None
+    stored = st.session_state.get(f"llm-{key}")
+    if llm is None:
+        st.caption("Montada dos sinais, sem LLM")
+        if summary.note:
+            st.info(summary.note, icon="ℹ️")
+        st.markdown(summary.text)
+        return
+    st.caption(f"Escrita pelo LLM a partir de {len(dyn.key_turns)} turnos-chave")
+    if stored is None:
+        try:
+            text = st.write_stream(llm.stream(state["redacted"], state["readings"], dyn))
+            stored = (str(text), None)
+        except SummaryUnavailable as error:
+            cause = type(error.__cause__ or error).__name__
+            stored = (summary.text, f"LLM indisponível ({cause}); resumo montado dos sinais.")
+        st.session_state[f"llm-{key}"] = stored
+        if stored[1] is None:
+            return  # o texto já está na tela
+    text, note = stored
+    if note:
+        st.info(note, icon="ℹ️")
+    st.markdown(text)
 
 
 def curve_chart(state: AnalysisState) -> alt.LayerChart:
@@ -131,12 +157,7 @@ def curve_chart(state: AnalysisState) -> alt.LayerChart:
 
 
 def render(state: AnalysisState, classifier: TurnClassifier, key: str) -> None:
-    readings, dyn, summary, csat = (
-        state["readings"],
-        state["dynamics"],
-        state["summary"],
-        state["csat"],
-    )
+    readings, dyn, csat = state["readings"], state["dynamics"], state["csat"]
     if isinstance(classifier, OfflineHeuristicClassifier):
         st.warning(
             "Modo offline: as leituras vêm de uma lista de palavras, não do Jev. "
@@ -155,10 +176,17 @@ def render(state: AnalysisState, classifier: TurnClassifier, key: str) -> None:
     c1, c2, c3 = st.columns(3)
     c4, c5, _ = st.columns(3)
     c1.metric("Turnos", len(readings) + len(state["failures"]))
-    c2.metric("Chamadas ao Jev", jev_calls, help="Uma por turno lido. 0 no modo offline.")
+    cached = classifier.usage.cached if isinstance(classifier, JevTurnClassifier) else 0
+    c2.metric(
+        "Chamadas ao Jev",
+        jev_calls,
+        delta=f"{cached} do cache" if cached else None,
+        delta_color="off",
+        help="Uma por turno lido. Respostas já vistas vêm do cache, sem custo. 0 no modo offline.",
+    )
     c3.metric(
         "Turnos ao LLM",
-        summary.turns_sent if summary.source == "llm" else 0,
+        len(dyn.key_turns) if make_summarizer(offline) else 0,
         help="O LLM só recebe os momentos-chave. 0 = resumo montado sem LLM.",
     )
     c4.metric(
@@ -193,14 +221,7 @@ def render(state: AnalysisState, classifier: TurnClassifier, key: str) -> None:
     left, right = st.columns([3, 2])
     with left:
         st.subheader("Análise")
-        st.caption(
-            "Escrita pelo LLM a partir dos momentos-chave"
-            if summary.source == "llm"
-            else "Montada dos sinais, sem LLM"
-        )
-        if summary.note:
-            st.info(summary.note, icon="ℹ️")
-        st.markdown(summary.text)
+        llm_summary(state, key)
         if dyn.turning_points:
             st.caption('Lembrete: "antes de" não é "por causa de".')
     with right:
@@ -251,6 +272,7 @@ with tab_text:
     if st.button("Analisar", type="primary", disabled=not raw.strip()):
         try:
             st.session_state.text = run_analysis(parse_chat(raw))
+            st.session_state.pop("llm-text", None)
         except ValueError as exc:
             st.error(f"Não consegui ler a conversa: {exc}")
     if "text" in st.session_state:
@@ -382,6 +404,7 @@ with tab_call:
                     known_names=known_names,
                 )
         st.session_state.call = (call, state, classifier, text_only)
+        st.session_state.pop("llm-call", None)
 
     if "call" in st.session_state:
         call, state, classifier, text_only = st.session_state.call

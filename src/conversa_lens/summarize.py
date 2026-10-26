@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+import time
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Literal, Protocol, TypeVar
 
+from langchain_core.exceptions import (
+    ModelAPIError,
+    ModelConnectionError,
+    ModelRateLimitError,
+    ModelTimeoutError,
+)
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage, BaseMessageChunk, HumanMessage, SystemMessage
 
 from conversa_lens.models import Dynamics, Turn, TurnReading
 
@@ -20,6 +27,9 @@ class Summary:
     """Quantos turnos foram enviados ao LLM (0 quando não houve chamada)."""
     note: str | None = None
     """Aviso para quem lê, por exemplo quando o LLM falhou e o template assumiu."""
+
+
+T = TypeVar("T")
 
 
 class SummaryUnavailable(Exception):
@@ -98,24 +108,75 @@ def build_prompt(turns: Sequence[Turn], readings: Sequence[TurnReading], dynamic
     return "\n".join(lines)
 
 
+_TRANSIENT = (ModelRateLimitError, ModelAPIError, ModelConnectionError, ModelTimeoutError)
+_OUT_OF_CREDIT = ("insufficient_quota", "credit_balance", "billing", "quota")
+
+
+def is_transient(error: Exception) -> bool:
+    """Vale tentar de novo? Sem créditos chega como 429, igual a limite de taxa, mas não passa."""
+    if not isinstance(error, _TRANSIENT):
+        return False
+    return not any(word in str(error).lower() for word in _OUT_OF_CREDIT)
+
+
 @dataclass
 class LLMSummarizer:
-    """Tenta até três vezes; se ainda falhar, o grafo usa o template e avisa."""
+    """Tenta até três vezes erros temporários; erro permanente (sem crédito, chave inválida)
+    desiste na hora. Se não der, o grafo usa o template e avisa."""
 
     model: BaseChatModel
     attempts: int = 3
+    base_delay: float = 1.0
+    sleep: Callable[[float], None] = time.sleep
+
+    def _messages(
+        self, turns: Sequence[Turn], readings: Sequence[TurnReading], dynamics: Dynamics
+    ) -> list[BaseMessage]:
+        return [SystemMessage(SYSTEM_PROMPT), HumanMessage(build_prompt(turns, readings, dynamics))]
+
+    def _retrying(self, call: Callable[[], T]) -> T:
+        for attempt in range(1, self.attempts + 1):
+            try:
+                return call()
+            except Exception as error:
+                if attempt == self.attempts or not is_transient(error):
+                    raise SummaryUnavailable(f"{type(error).__name__}: {error}") from error
+                self.sleep(self.base_delay * 2 ** (attempt - 1))
+        raise AssertionError("inalcançável")
 
     def summarize(
         self, turns: Sequence[Turn], readings: Sequence[TurnReading], dynamics: Dynamics
     ) -> Summary:
-        prompt = build_prompt(turns, readings, dynamics)
+        messages = self._messages(turns, readings, dynamics)
+        message = self._retrying(lambda: self.model.invoke(messages))
+        return Summary(message.text, "llm", len(dynamics.key_turns))
+
+    def stream(
+        self, turns: Sequence[Turn], readings: Sequence[TurnReading], dynamics: Dynamics
+    ) -> Iterator[str]:
+        """O texto aos pedaços, para mostrar enquanto o LLM escreve.
+
+        Só repete se falhar antes do primeiro pedaço: depois disso, repetir duplicaria texto
+        já mostrado.
+        """
+        messages = self._messages(turns, readings, dynamics)
+
+        def open_stream() -> tuple[str, Iterator[BaseMessageChunk]]:
+            chunks = iter(self.model.stream(messages))
+            for chunk in chunks:
+                if chunk.text:
+                    return chunk.text, chunks
+            return "", chunks
+
+        first, rest = self._retrying(open_stream)  # cada tentativa recomeça do zero
+        if first:
+            yield first
         try:
-            message = self.model.with_retry(stop_after_attempt=self.attempts).invoke(
-                [SystemMessage(SYSTEM_PROMPT), HumanMessage(prompt)]
-            )
+            for chunk in rest:
+                if chunk.text:
+                    yield chunk.text
         except Exception as error:
             raise SummaryUnavailable(f"{type(error).__name__}: {error}") from error
-        return Summary(message.text, "llm", len(dynamics.key_turns))
 
 
 class TemplateSummarizer:
@@ -125,8 +186,8 @@ class TemplateSummarizer:
         self, turns: Sequence[Turn], readings: Sequence[TurnReading], dynamics: Dynamics
     ) -> Summary:
         start, end = dynamics.customer_start, dynamics.customer_end
-        trend = "estável"
-        if start is not None and end is not None and abs(end - start) >= 1:
+        trend = "ficou estável"
+        if start is not None and end is not None and abs(end - start) >= 0.5:
             trend = "melhorou" if end > start else "piorou"
         parts = [
             f"### Resumo\nConversa de {len(turns)} turnos. O sentimento do cliente {trend} "

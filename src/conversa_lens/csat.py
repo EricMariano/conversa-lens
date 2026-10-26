@@ -24,6 +24,7 @@ from typing import Literal, Protocol
 import numpy as np
 from langchain_typesafe import ClassifierRequest, Score, TypeSafeClassifier
 
+from conversa_lens.cache import ResponseCache
 from conversa_lens.classify import Retry
 from conversa_lens.models import Dynamics, Turn, TurnReading
 
@@ -66,13 +67,14 @@ def conversation_state(turns: Sequence[Turn]) -> list[dict[str, str]]:
 class JevCsatEstimator:
     client: TypeSafeClassifier = field(default_factory=TypeSafeClassifier)
     retry: Retry = field(default_factory=Retry)
+    cache: ResponseCache | None = None
 
     def estimate(self, turns: Sequence[Turn]) -> CsatEstimate:
         request: ClassifierRequest = {
             "state": conversation_state(turns),  # type: ignore[typeddict-item]
             "questions": {"csat": CSAT_QUESTION},
         }
-        response, _ = self.retry.call(self.client, request)
+        response, _ = self.retry.call(self.client, request, self.cache)
         answer = response.scores["csat"]
         return CsatEstimate(
             value=answer.score + 1,

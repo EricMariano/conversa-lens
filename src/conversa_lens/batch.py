@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import json
 from collections.abc import Callable, Iterator, Sequence
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -123,32 +124,44 @@ def run_batch(
     csat_estimator: CsatEstimator | None = None,
     csat_model: CsatModel | None = None,
     on_progress: Callable[[int, int, BatchRow], None] | None = None,
+    max_conversations: int = 4,
 ) -> list[BatchRow]:
-    rows: list[BatchRow] = []
-    for n, item in enumerate(items, 1):
+    """Analisa ``max_conversations`` conversas ao mesmo tempo.
+
+    Cada conversa já lê seus turnos em paralelo, mas ela é curta: sem isso, o lote passa a
+    maior parte do tempo esperando a última requisição de uma conversa antes de começar a
+    próxima.
+    """
+
+    def one(item: Conversation | tuple[str, str]) -> BatchRow:
         if isinstance(item, tuple):
-            row = BatchRow(id=item[0], erro=item[1])
-        else:
-            try:
-                state = analyze(
-                    item.turns,
-                    classifier,
-                    summarizer,
-                    csat_estimator=csat_estimator,
-                    csat_model=csat_model,
-                )
-                row = _row(item, state)
-            except Exception as error:  # uma conversa ruim não derruba o lote
-                row = BatchRow(
-                    id=item.id,
-                    turnos=len(item.turns),
-                    nota_real=item.rating,
-                    erro=f"{type(error).__name__}: {error}",
-                )
-        rows.append(row)
-        if on_progress:
-            on_progress(n, len(items), row)
-    return sorted(rows, key=lambda r: r.priority)
+            return BatchRow(id=item[0], erro=item[1])
+        try:
+            state = analyze(
+                item.turns,
+                classifier,
+                summarizer,
+                csat_estimator=csat_estimator,
+                csat_model=csat_model,
+            )
+            return _row(item, state)
+        except Exception as error:  # uma conversa ruim não derruba o lote
+            return BatchRow(
+                id=item.id,
+                turnos=len(item.turns),
+                nota_real=item.rating,
+                erro=f"{type(error).__name__}: {error}",
+            )
+
+    rows: list[BatchRow] = []
+    with ThreadPoolExecutor(max(1, max_conversations)) as pool:
+        futures = [pool.submit(one, item) for item in items]
+        for n, future in enumerate(as_completed(futures), 1):
+            row = future.result()
+            rows.append(row)
+            if on_progress:
+                on_progress(n, len(items), row)
+    return sorted(rows, key=lambda r: (r.priority, r.id))
 
 
 CSV_COLUMNS = [f for f in BatchRow.__dataclass_fields__ if f not in {"sinais", "resumo"}]

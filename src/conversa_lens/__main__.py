@@ -27,6 +27,7 @@ from conversa_lens.providers import (
     make_csat_estimator,
     make_summarizer,
 )
+from conversa_lens.summarize import SummaryUnavailable
 
 
 def cmd_analisar(args: argparse.Namespace) -> None:
@@ -59,13 +60,9 @@ def cmd_ligacao(args: argparse.Namespace) -> None:
 
 def report(turns: list[Turn], args: argparse.Namespace) -> None:
     classifier = make_classifier(args.offline)
+    # O resumo do LLM vem depois, aos pedaços: as leituras do Jev aparecem na hora.
     state = analyze(
-        turns,
-        classifier,
-        make_summarizer(args.offline),
-        args.nome,
-        make_csat_estimator(args.offline),
-        load_csat_model(),
+        turns, classifier, None, args.nome, make_csat_estimator(args.offline), load_csat_model()
     )
     print(f"classificador: {classifier.name}")
     print(f"dados pessoais removidos: {state['redaction_counts'] or 'nenhum'}")
@@ -84,9 +81,18 @@ def report(turns: list[Turn], args: argparse.Namespace) -> None:
     if state["csat_predicted"] is not None:
         print(f"satisfação pelo modelo calibrado: {state['csat_predicted']:.1f}")
     print()
-    if state["summary"].note:
-        print(f"[{state['summary'].note}]")
-    print(state["summary"].text)
+    llm = make_summarizer(args.offline) if state["dynamics"].key_turns else None
+    if llm is None:
+        print(state["summary"].text)
+        return
+    try:
+        for piece in llm.stream(state["redacted"], state["readings"], state["dynamics"]):
+            print(piece, end="", flush=True)
+        print()
+    except SummaryUnavailable as error:
+        cause = type(error.__cause__ or error).__name__
+        print(f"[LLM indisponível ({cause}); resumo montado dos sinais.]")
+        print(state["summary"].text)
 
 
 def cmd_lote(args: argparse.Namespace) -> None:
@@ -106,6 +112,7 @@ def cmd_lote(args: argparse.Namespace) -> None:
         make_csat_estimator(args.offline),
         load_csat_model(),
         progress,
+        args.paralelo,
     )
     csv_path, jsonl_path = write_reports(rows, args.saida)
     print(file=sys.stderr)
@@ -175,6 +182,7 @@ def main() -> None:
     p.add_argument(
         "--com-llm", action="store_true", help="resumo com LLM nas conversas com virada ou alerta"
     )
+    p.add_argument("--paralelo", type=int, default=4, help="conversas analisadas ao mesmo tempo")
     p.set_defaults(fn=cmd_lote)
 
     csat = sub.add_parser("csat", help="avaliar ou treinar a nota de satisfação").add_subparsers(

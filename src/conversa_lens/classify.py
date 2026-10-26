@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 import re
+import threading
 import time
 import unicodedata
 from collections.abc import Callable, Sequence
@@ -18,6 +19,7 @@ from langchain_typesafe.client import (
     TypeSafeRateLimitError,
 )
 
+from conversa_lens.cache import ResponseCache, model_name, request_key
 from conversa_lens.models import ReadResult, Turn, TurnFailure, TurnReading
 from conversa_lens.questions import (
     AGENT_POSTURES,
@@ -40,14 +42,22 @@ class TurnClassifier(Protocol):
 class Usage:
     requests: int = 0
     retries: int = 0
+    cached: int = 0
+    """Respostas que vieram do cache, sem chamar o Jev."""
     input_tokens: int = 0
     output_tokens: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False, compare=False)
 
     def add(self, response: ClassifierResponse, attempts: int) -> None:
-        self.requests += 1
-        self.retries += attempts - 1
-        self.input_tokens += response.usage.input_tokens or 0
-        self.output_tokens += response.usage.output_tokens or 0
+        """``attempts == 0`` quer dizer que veio do cache."""
+        with self._lock:  # o lote analisa várias conversas ao mesmo tempo
+            if attempts == 0:
+                self.cached += 1
+                return
+            self.requests += 1
+            self.retries += attempts - 1
+            self.input_tokens += response.usage.input_tokens or 0
+            self.output_tokens += response.usage.output_tokens or 0
 
 
 TRANSIENT_ERRORS: tuple[type[Exception], ...] = (
@@ -79,11 +89,21 @@ class Retry:
     sleep: Callable[[float], None] = time.sleep
 
     def call(
-        self, client: TypeSafeClassifier, request: ClassifierRequest
+        self,
+        client: TypeSafeClassifier,
+        request: ClassifierRequest,
+        cache: ResponseCache | None = None,
     ) -> tuple[ClassifierResponse, int]:
+        """Resposta e número de tentativas (0 quando veio do ``cache``)."""
+        key = request_key(request, model_name(client)) if cache is not None else ""
+        if cache is not None and (hit := cache.get(key)) is not None:
+            return hit, 0
         for attempt in range(1, self.max_attempts + 1):
             try:
-                return client.invoke(request), attempt
+                response = client.invoke(request)
+                if cache is not None:
+                    cache.put(key, response)
+                return response, attempt
             except TRANSIENT_ERRORS as error:
                 if attempt == self.max_attempts:
                     raise GaveUp(error, attempt) from error
@@ -108,6 +128,7 @@ class JevTurnClassifier:
     client: TypeSafeClassifier = field(default_factory=TypeSafeClassifier)
     max_concurrency: int = 8
     retry: Retry = field(default_factory=Retry)
+    cache: ResponseCache | None = None
     name: str = "Jev (TypeSafe)"
     usage: Usage = field(default_factory=Usage)
 
@@ -117,7 +138,7 @@ class JevTurnClassifier:
                 "state": turn_state(turns, turn.index),  # type: ignore[typeddict-item]
                 "questions": QUESTIONS[turn.speaker],
             }
-            return self.retry.call(self.client, request)
+            return self.retry.call(self.client, request, self.cache)
 
         readings: list[TurnReading] = []
         failures: list[TurnFailure] = []

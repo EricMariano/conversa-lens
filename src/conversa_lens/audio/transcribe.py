@@ -72,9 +72,9 @@ def load_audio(path: Path) -> list[np.ndarray]:
 
 
 def _whisper(model_size: str) -> Any:
-    from faster_whisper import WhisperModel
+    from faster_whisper import BatchedInferencePipeline, WhisperModel
 
-    return WhisperModel(model_size, device="cpu", compute_type="int8")
+    return BatchedInferencePipeline(WhisperModel(model_size, device="cpu", compute_type="int8"))
 
 
 @dataclass
@@ -86,6 +86,7 @@ class LocalStereoTranscriber:
     language: str = "pt"
     max_pause: float = 0.6
     """Pausa (s) entre palavras que separa duas falas no mesmo canal."""
+    batch_size: int = 8
     _model: Any = None
 
     def transcribe(self, path: Path) -> Transcript:
@@ -107,13 +108,16 @@ class LocalStereoTranscriber:
         return Transcript(utterances, {"atendente": agent, "cliente": customer})
 
     def _channel(self, speaker: str, signal: np.ndarray) -> list[Utterance]:
+        # Em lotes: cada trecho de fala (achado pelo VAD) é transcrito à parte. Numa ligação
+        # de 5 min foi 3,4x mais rápido e errou 3,8% das palavras do cliente, contra 45% do
+        # modo sequencial, que se perdia ao correr o canal inteiro (ver README).
         segments, _ = self._model.transcribe(
             signal,
             language=self.language,
+            batch_size=self.batch_size,
             vad_filter=True,  # o canal fica em silêncio enquanto o outro fala
             vad_parameters={"min_silence_duration_ms": 500},
             word_timestamps=True,
-            condition_on_previous_text=False,
         )
         words = [(w, s.avg_logprob) for s in segments for w in (s.words or []) if w.word.strip()]
         return split_on_pauses(speaker, words, self.max_pause)

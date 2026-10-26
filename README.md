@@ -159,6 +159,45 @@ ainda não foi validado:
 - **Satisfação fora do ar:** a análise segue com o valor offline.
 - **Lote:** uma conversa ilegível ou com falha vira uma linha com `erro`; o lote continua.
 
+## Desempenho
+
+Medido num Mac M4 (26/10/2026). O código do projeto não é o gargalo: o tempo vai para
+esperar o LLM e, no áudio, para a transcrição.
+
+| etapa | tempo |
+|---|---|
+| Jev, conversa de 13 turnos (8 requisições em paralelo) | 0,9 s (0,23 s por requisição) |
+| satisfação (1 requisição) | 0,24 s |
+| resumo do LLM (`gpt-5-nano`) | 30–40 s, por isso é mostrado aos pedaços |
+| transcrição local, ligação de 4,8 min | 22 s (0,08× a duração) |
+| sinais de voz | menos de 0,5 s |
+
+O que foi feito, com o efeito medido:
+
+- **Resultado em etapas.** A curva, os alertas e a satisfação aparecem em ~1 s; o resumo do
+  LLM é escrito na tela (e no terminal) aos pedaços, depois.
+- **Desistir rápido de erro permanente do LLM.** Sem crédito ou com chave inválida, não há
+  repetição: uma análise que levava ~17 s esperando um erro sem saída leva 6 s. "Sem
+  crédito" chega como 429, igual a limite de taxa, e é tratado à parte.
+- **Lote com várias conversas ao mesmo tempo** (`--paralelo`, padrão 4). 34 conversas:
+  38,8 s com uma por vez, 15,0 s com quatro; com oito, 14,7 s (o limite passa a ser o
+  servidor).
+- **Cache das respostas do Jev** (SQLite em `~/.cache/conversa_lens/`, `CONVERSA_CACHE=0`
+  desliga). O mesmo lote de 34 conversas, de novo: 0,8 s. O Jev varia um pouco entre
+  chamadas (até 0,12 ponto na satisfação); com o cache, a mesma conversa dá sempre o mesmo
+  resultado.
+- **Transcrição em lotes** (`BatchedInferencePipeline` do faster-whisper). Ligação de 4,8 min,
+  medida contra o roteiro falado:
+
+| forma | tempo | erro de palavras (atendente / cliente) |
+|---|---:|---:|
+| sequencial, canal inteiro | 75,6 s | 5,6% / **45,0%** |
+| **em lotes, trecho a trecho** | **22,5 s** | 7,6% / 3,8% |
+
+  O modo sequencial se perdia no canal inteiro e alucinava; em lotes, cada trecho de fala é
+  transcrito à parte. Transcrever os dois canais em paralelo não ajudou (78 s): o Whisper já
+  usa todos os núcleos.
+
 ## LGPD e privacidade
 
 - **A anonimização roda antes do Jev e do LLM.** CPF, CNPJ, cartão (com dígito verificador),
@@ -172,6 +211,7 @@ ainda não foi validado:
   saem da máquina. No mono pela OpenAI, o áudio bruto sai.
 - O texto anonimizado vai para o TypeSafe e para o provedor do LLM.
 - As amostras em `samples/` são fictícias; as ligações são voz sintética do macOS.
+- O cache do Jev guarda só um hash do pedido e as probabilidades da resposta, nunca o texto.
 - A telemetria do Streamlit está desligada em `.streamlit/config.toml`.
 
 ## Resultados até agora
@@ -194,7 +234,8 @@ JD.com, nota de anotadores; piloto em chinês, português e inglês e detalhes e
 - Com 200 conversas, o modelo calibrado acerta melhor o número e quase não dá alarme falso,
   mas acha menos insatisfeitas. Para triagem, a estimativa pura; para o número, o calibrado.
 
-**Voz, duas ligações sintéticas com o mesmo texto** ([`samples/audio/`](samples/audio/)):
+**Voz, duas ligações sintéticas com o mesmo texto** ([`samples/audio/`](samples/audio/);
+medido antes da troca para a transcrição em lotes, que mudou só a pontuação dessas falas):
 
 | fala do cliente | só texto | com voz, ligação calma | com voz, ligação irritada |
 |---|---:|---:|---:|
