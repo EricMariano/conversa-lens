@@ -23,8 +23,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from dotenv import load_dotenv
-from langchain.chat_models import init_chat_model
 from pydantic import BaseModel
+
+from conversa_lens.providers import chat_model
 
 LANGUAGES = {
     "pt": "português do Brasil, como num chat de atendimento brasileiro",
@@ -107,7 +108,7 @@ def main() -> None:
     todo = [r for r in rows if r["id"] not in done]
     print(f"{len(done)} já traduzidas, {len(todo)} a traduzir com {args.modelo}")
 
-    model = init_chat_model(args.modelo).with_structured_output(Translation)
+    model = chat_model(args.modelo).with_structured_output(Translation)
     failed = 0
     with ThreadPoolExecutor(args.paralelo) as pool, out_path.open("a") as f:
         futures = [pool.submit(translate, model, r, args.para) for r in todo]

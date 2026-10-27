@@ -22,7 +22,9 @@ dependencies = [
 [project.optional-dependencies]
 app = ["streamlit>=1.40,<2", "pandas>=2.2,<4", "python-dotenv>=1,<2"]
 audio = ["faster-whisper>=1.1,<2", "librosa>=0.10,<2", "soundfile>=0.12,<1"]
-# Áudio mono pela OpenAI (gpt-4o-transcribe-diarize); resumo com modelos da OpenAI.
+# Resumo e tradução por qualquer modelo da OpenRouter (padrão).
+openrouter = ["langchain-openrouter>=0.2,<1"]
+# Áudio mono pela OpenAI (gpt-4o-transcribe-diarize); resumo direto na OpenAI.
 openai = ["openai>=1.100,<3", "langchain-openai>=1,<2"]
 
 [dependency-groups]

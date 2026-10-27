@@ -62,7 +62,7 @@ interface diz isso ao lado do gráfico e da análise, e o prompt do LLM proíbe 
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -e ".[app,audio,openai]"
+.venv/bin/python -m pip install -e ".[app,audio,openrouter]"
 .venv/bin/python -m streamlit run app.py
 ```
 
@@ -72,7 +72,15 @@ tabela de alertas, CSV).
 Sem chaves, tudo roda em **modo offline**: uma heurística de palavras-chave no lugar do Jev e
 um resumo por template no lugar do LLM. Serve para ver o fluxo; **os números do modo offline
 não dizem nada sobre o Jev**, e o app avisa na tela. Para os serviços reais, copie
-`.env.example` para `.env`.
+`.env.example` para `.env`:
+
+- `TYPESAFE_API_KEY`: o Jev.
+- `OPENROUTER_API_KEY` e `CONVERSA_CHAT_MODEL=openrouter:openai/gpt-5-nano` (padrão): o
+  resumo dos momentos-chave e a tradução dos benchmarks. Qualquer modelo da OpenRouter serve
+  (`openrouter:anthropic/...`, `openrouter:qwen/...`), e a OpenRouter só encaminha para
+  provedores que não guardam os dados. Também aceita `openai:...` ou `anthropic:...` direto,
+  com a chave do provedor.
+- `OPENAI_API_KEY`: só para áudio mono (`--mono-openai`).
 
 Pela linha de comando:
 
@@ -209,7 +217,8 @@ O que foi feito, com o efeito medido:
   Microsoft Presidio) e revise uma amostra à mão.
 - **Áudio:** no estéreo, a transcrição é local e só o texto anonimizado e os números de voz
   saem da máquina. No mono pela OpenAI, o áudio bruto sai.
-- O texto anonimizado vai para o TypeSafe e para o provedor do LLM.
+- O texto anonimizado vai para o TypeSafe e para o provedor do LLM. Pela OpenRouter, o pedido
+  vai com `data_collection: deny`: só provedores que não guardam nem treinam com os dados.
 - As amostras em `samples/` são fictícias; as ligações são voz sintética do macOS.
 - O cache do Jev guarda só um hash do pedido e as probabilidades da resposta, nunca o texto.
 - A telemetria do Streamlit está desligada em `.streamlit/config.toml`.

@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from langchain_core.language_models import BaseChatModel
+
 from conversa_lens.cache import ResponseCache
 from conversa_lens.classify import JevTurnClassifier, OfflineHeuristicClassifier, TurnClassifier
 from conversa_lens.csat import CsatEstimator, CsatModel, JevCsatEstimator
@@ -39,14 +41,41 @@ def make_classifier(offline: bool = False) -> TurnClassifier:
     return JevTurnClassifier(cache=response_cache())
 
 
-def make_summarizer(offline: bool = False) -> LLMSummarizer | None:
-    """``None`` quando não há modelo configurado: o grafo usa o resumo por template."""
-    model = os.environ.get("CONVERSA_CHAT_MODEL")
-    if offline or not model:
-        return None
+OPENROUTER_PREFIX = "openrouter:"
+_KEY_FOR = {
+    "openrouter": "OPENROUTER_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+}
+
+
+def has_key_for(spec: str) -> bool:
+    """O provedor do modelo tem chave no ambiente? (Provedores desconhecidos: assume que sim.)"""
+    var = _KEY_FOR.get(spec.split(":", 1)[0])
+    return var is None or bool(os.environ.get(var))
+
+
+def chat_model(spec: str) -> BaseChatModel:
+    """Modelo de chat a partir de ``provedor:modelo``, no formato do ``init_chat_model``.
+
+    Com ``openrouter:`` (por exemplo ``openrouter:openai/gpt-5-nano``), a OpenRouter só
+    encaminha para provedores que não guardam nem treinam com os dados
+    (``data_collection: deny``). ``CONVERSA_OPENROUTER_PRIVADO=0`` desliga, se nenhum
+    provedor do modelo escolhido aceitar a restrição.
+    """
     from langchain.chat_models import init_chat_model
 
-    return LLMSummarizer(init_chat_model(model))
+    if spec.startswith(OPENROUTER_PREFIX) and os.environ.get("CONVERSA_OPENROUTER_PRIVADO") != "0":
+        return init_chat_model(spec, openrouter_provider={"data_collection": "deny"})
+    return init_chat_model(spec)
+
+
+def make_summarizer(offline: bool = False) -> LLMSummarizer | None:
+    """``None`` sem modelo configurado ou sem a chave do provedor: o resumo vira template."""
+    spec = os.environ.get("CONVERSA_CHAT_MODEL")
+    if offline or not spec or not has_key_for(spec):
+        return None
+    return LLMSummarizer(chat_model(spec))
 
 
 def make_csat_estimator(offline: bool = False) -> CsatEstimator | None:

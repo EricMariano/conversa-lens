@@ -112,9 +112,22 @@ _TRANSIENT = (ModelRateLimitError, ModelAPIError, ModelConnectionError, ModelTim
 _OUT_OF_CREDIT = ("insufficient_quota", "credit_balance", "billing", "quota")
 
 
+# O SDK da OpenRouter não usa os tipos do LangChain; pelo nome, sem importar o pacote.
+_TRANSIENT_NAMES = {
+    "TooManyRequestsResponseError",
+    "ProviderOverloadedResponseError",
+    "ServiceUnavailableResponseError",
+    "BadGatewayResponseError",
+    "InternalServerResponseError",
+    "EdgeNetworkTimeoutResponseError",
+    "RequestTimeoutResponseError",
+    "NoResponseError",
+}
+
+
 def is_transient(error: Exception) -> bool:
-    """Vale tentar de novo? Sem créditos chega como 429, igual a limite de taxa, mas não passa."""
-    if not isinstance(error, _TRANSIENT):
+    """Vale tentar de novo? Sem créditos chega como 429 (OpenAI) ou 402 (OpenRouter): não passa."""
+    if not isinstance(error, _TRANSIENT) and type(error).__name__ not in _TRANSIENT_NAMES:
         return False
     return not any(word in str(error).lower() for word in _OUT_OF_CREDIT)
 
