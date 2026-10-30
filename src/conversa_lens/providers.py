@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 
@@ -55,7 +56,7 @@ def has_key_for(spec: str) -> bool:
     return var is None or bool(os.environ.get(var))
 
 
-def chat_model(spec: str) -> BaseChatModel:
+def chat_model(spec: str, **options: Any) -> BaseChatModel:
     """Modelo de chat a partir de ``provedor:modelo``, no formato do ``init_chat_model``.
 
     Com ``openrouter:`` (por exemplo ``openrouter:openai/gpt-5-nano``), a OpenRouter só
@@ -66,8 +67,9 @@ def chat_model(spec: str) -> BaseChatModel:
     from langchain.chat_models import init_chat_model
 
     if spec.startswith(OPENROUTER_PREFIX) and os.environ.get("CONVERSA_OPENROUTER_PRIVADO") != "0":
-        return init_chat_model(spec, openrouter_provider={"data_collection": "deny"})
-    return init_chat_model(spec)
+        options.setdefault("openrouter_provider", {"data_collection": "deny"})
+    model: BaseChatModel = init_chat_model(spec, **options)
+    return model
 
 
 def make_summarizer(offline: bool = False) -> LLMSummarizer | None:

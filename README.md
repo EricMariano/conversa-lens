@@ -75,7 +75,7 @@ não dizem nada sobre o Jev**, e o app avisa na tela. Para os serviços reais, c
 `.env.example` para `.env`:
 
 - `TYPESAFE_API_KEY`: o Jev.
-- `OPENROUTER_API_KEY` e `CONVERSA_CHAT_MODEL=openrouter:openai/gpt-5-nano` (padrão): o
+- `OPENROUTER_API_KEY` e `CONVERSA_CHAT_MODEL=openrouter:mistralai/mistral-small-3.2-24b-instruct` (padrão): o
   resumo dos momentos-chave e a tradução dos benchmarks. Qualquer modelo da OpenRouter serve
   (`openrouter:anthropic/...`, `openrouter:qwen/...`), e a OpenRouter só encaminha para
   provedores que não guardam os dados. Também aceita `openai:...` ou `anthropic:...` direto,
@@ -176,7 +176,7 @@ esperar o LLM e, no áudio, para a transcrição.
 |---|---|
 | Jev, conversa de 13 turnos (8 requisições em paralelo) | 0,9 s (0,23 s por requisição) |
 | satisfação (1 requisição) | 0,24 s |
-| resumo do LLM (`gpt-5-nano`) | 30–40 s, por isso é mostrado aos pedaços |
+| resumo do LLM (Mistral Small 3.2) | ~9 s; o primeiro pedaço aparece em ~4 s ([comparação](benchmarks/llm/README.md)) |
 | transcrição local, ligação de 4,8 min | 22 s (0,08× a duração) |
 | sinais de voz | menos de 0,5 s |
 
