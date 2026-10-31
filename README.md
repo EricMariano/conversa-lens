@@ -227,21 +227,23 @@ O que foi feito, com o efeito medido:
 
 Tudo abaixo é piloto: amostras pequenas, uma execução cada.
 
-**Satisfação, 207 conversas reais do JDDC traduzidas para português** (atendimento do
+**Satisfação, 297 conversas reais do JDDC traduzidas para português** (atendimento do
 JD.com, nota de anotadores; piloto em chinês, português e inglês e detalhes em
 [`benchmarks/uss/`](benchmarks/uss/README.md)):
 
-| método | MAE | Spearman | insatisfeitas achadas (de 52) | alarmes falsos |
+| método | MAE | Spearman | insatisfeitas achadas (de 76) | alarmes falsos |
 |---|---:|---:|---:|---:|
-| sentimento final do cliente | 0,71 | 0,62 | 32 | 13 |
-| **estimativa do Jev, sem treino** | 0,71 | **0,74** | **38** | 17 |
-| modelo calibrado (CV 5 dobras) | **0,60** | 0,74 | 23 | 2 |
+| sentimento final do cliente | 0,73 | 0,63 | 45 | 21 |
+| **estimativa do Jev, sem treino** | 0,74 | **0,71** | **54** | 27 |
+| modelo calibrado (CV 5 dobras) | **0,58** | **0,76** | 27 | 5 |
 
 - A tradução preserva o sinal: a estimativa do Jev para a mesma conversa em chinês e em
   português concorda com Spearman 0,96 (34 conversas).
-- Sem treino, o Jev ordena bem e acha 73% das insatisfeitas, mas comprime a escala.
-- Com 200 conversas, o modelo calibrado acerta melhor o número e quase não dá alarme falso,
-  mas acha menos insatisfeitas. Para triagem, a estimativa pura; para o número, o calibrado.
+- Sem treino, o Jev ordena bem e acha 71% das insatisfeitas, mas comprime a escala.
+- Com ~300 conversas, o modelo calibrado erra menos e ordena melhor, mas acha menos
+  insatisfeitas. Para triagem, a estimativa pura; para o número, o calibrado.
+- Duas partes da amostra foram traduzidas por modelos diferentes; a diferença entre elas é
+  inconclusiva (ver o README do benchmark).
 
 **Voz, duas ligações sintéticas com o mesmo texto** ([`samples/audio/`](samples/audio/);
 medido antes da troca para a transcrição em lotes, que mudou só a pontuação dessas falas):

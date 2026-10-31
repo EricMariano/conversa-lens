@@ -195,9 +195,9 @@ def render(state: AnalysisState, classifier: TurnClassifier, key: str) -> None:
         help="Trocados por marcadores antes de sair da máquina.",
     )
     csat_help = {
-        "jev": "Estimativa do Jev sobre a conversa inteira, sem treino. Em 207 conversas de "
-        "atendimento traduzidas para português, ordenou bem as notas (Spearman 0,74) e achou "
-        "73% das insatisfeitas, mas comprime a escala.",
+        "jev": "Estimativa do Jev sobre a conversa inteira, sem treino. Em 297 conversas de "
+        "atendimento traduzidas para português, ordenou bem as notas (Spearman 0,71) e achou "
+        "71% das insatisfeitas, mas comprime a escala.",
         "offline": "Sem Jev: repete o sentimento final do cliente. Não é uma estimativa.",
         "calibrado": "",
     }[csat.source]

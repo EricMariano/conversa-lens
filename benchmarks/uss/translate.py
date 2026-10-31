@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from conversa_lens.providers import chat_model
 
@@ -54,6 +54,19 @@ class Translation(BaseModel):
     messages: list[str]
     """O texto traduzido de cada mensagem, na mesma ordem."""
 
+    @field_validator("messages", mode="before")
+    @classmethod
+    def _lenient(cls, value: object) -> object:
+        """Alguns modelos devolvem a lista como texto JSON, ou itens como objetos."""
+        if isinstance(value, str):
+            value = json.loads(value)
+        if isinstance(value, list):
+            return [
+                v.get("texto") or v.get("content") or v.get("text") if isinstance(v, dict) else v
+                for v in value
+            ]
+        return value
+
 
 _MARKERS = [
     (re.compile(r"\[ORDERID_\d+\]"), "[PEDIDO]"),
@@ -63,21 +76,38 @@ _MARKERS = [
 ]
 
 
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+MAX_UNTRANSLATED = 0.2
+"""Fração máxima de mensagens com chinês (traduções boas ficam em ~3%: endereços, marcas)."""
+
+
 def premask(text: str) -> str:
     for pattern, marker in _MARKERS:
         text = pattern.sub(marker, text)
     return text
 
 
-def translate(model, row: dict, lang: str, attempts: int = 3) -> dict:  # type: ignore[no-untyped-def]
+def translate(model, row: dict, lang: str, translator: str, attempts: int = 3) -> dict:  # type: ignore[no-untyped-def]
     msgs = row["messages"]
     payload = json.dumps(
         [{"papel": m["role"], "texto": premask(m["content"])} for m in msgs], ensure_ascii=False
     )
     prompt = PROMPT.format(lang=LANGUAGES[lang], n=len(msgs), conversation=payload)
+    last = "sem resposta estruturada"
     for _ in range(attempts):
-        out: Translation = model.invoke(prompt)
-        if len(out.messages) == len(msgs):
+        try:
+            out: Translation | None = model.invoke(prompt)
+        except Exception as error:  # formato inválido do modelo: tenta de novo
+            last = f"{type(error).__name__}: {str(error)[:120]}"
+            continue
+        if out is None:
+            continue
+        untranslated = sum(1 for t in out.messages if _CJK.search(t)) / max(len(msgs), 1)
+        if len(out.messages) != len(msgs):
+            last = f"{len(out.messages)} mensagens em vez de {len(msgs)}"
+        elif untranslated > MAX_UNTRANSLATED:  # o modelo às vezes devolve o original ou o prompt
+            last = f"{untranslated:.0%} das mensagens ainda em chinês"
+        else:
             return {
                 **row,
                 "messages": [
@@ -85,8 +115,9 @@ def translate(model, row: dict, lang: str, attempts: int = 3) -> dict:  # type: 
                     for m, t in zip(msgs, out.messages, strict=True)
                 ],
                 "lingua": lang,
+                "tradutor": translator,
             }
-    raise ValueError(f"{row['id']}: tradução com número de mensagens diferente do original")
+    raise ValueError(f"{row['id']}: {last}")
 
 
 def main() -> None:
@@ -111,7 +142,7 @@ def main() -> None:
     model = chat_model(args.modelo).with_structured_output(Translation)
     failed = 0
     with ThreadPoolExecutor(args.paralelo) as pool, out_path.open("a") as f:
-        futures = [pool.submit(translate, model, r, args.para) for r in todo]
+        futures = [pool.submit(translate, model, r, args.para, args.modelo) for r in todo]
         for n, future in enumerate(as_completed(futures), 1):  # grava assim que termina
             try:
                 f.write(json.dumps(future.result(), ensure_ascii=False) + "\n")

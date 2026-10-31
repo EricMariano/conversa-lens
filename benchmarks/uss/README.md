@@ -47,34 +47,44 @@ A tradução preserva o sinal, e o português não fica atrás do inglês. Sobra
 chineses em 3% das mensagens em português (1,6% em inglês): quase tudo marcadores do dataset
 (`[时间x]`, `[电话x]`), nomes de produto e endereços.
 
-## 2. Em escala: 207 conversas em português
+## 2. Em escala: 297 conversas em português
 
-Amostra de 302 conversas (75 por nota, seed 1); a tradução parou em 207 quando os créditos
-da API de tradução acabaram. As 207 continuam equilibradas: 2 / 50 / 52 / 54 / 49 conversas
-com nota 1 / 2 / 3 / 4 / 5. 4.800 requisições ao Jev, nenhuma falha.
+Amostra de 302 conversas (75 por nota, seed 1). A tradução foi feita em duas partes: 207
+conversas com `gpt-5-nano` (até acabarem os créditos) e 90 com Mistral Small 3.2 pela
+OpenRouter (o campo `tradutor` de cada linha diz qual). Cinco conversas longas (28 a 65
+mensagens) ficaram de fora: o Mistral juntava ou dividia mensagens e a checagem rejeitou.
+Notas: 2 / 74 / 74 / 73 / 74 conversas com nota 1 / 2 / 3 / 4 / 5 (arredondada). Cerca de
+7 mil requisições ao Jev, nenhuma falha.
 
-| método | MAE | Spearman | insatisfeitas achadas (de 52) | alarmes falsos |
+| método | MAE | Spearman | insatisfeitas achadas (de 76) | alarmes falsos |
 |---|---:|---:|---:|---:|
 | sempre a média | 0,94 | – | 0 | 0 |
-| sentimento final do cliente (Jev por turno) | 0,71 | 0,62 | 32 | 13 |
-| **estimativa do Jev** (1 `Score` na conversa) | 0,71 | **0,74** | **38** | 17 |
-| modelo calibrado (ridge, CV 5 dobras) | **0,60** | 0,74 | 23 | 2 |
+| sentimento final do cliente (Jev por turno) | 0,73 | 0,63 | 45 | 21 |
+| **estimativa do Jev** (1 `Score` na conversa) | 0,74 | **0,71** | **54** | 27 |
+| modelo calibrado (ridge, CV 5 dobras) | **0,58** | **0,76** | 27 | 5 |
 
-- Spearman da estimativa do Jev: IC95% [0,66; 0,80] (bootstrap).
-- Estimativa média por nota real: 2,16 (nota 2), 3,11 (nota 3), 3,45 (nota 4), 3,99 (nota 5).
-  Ordena bem, mas comprime a escala: quase nunca passa de 4,5.
-- O modelo calibrado erra menos no valor (MAE 0,60) e quase não dá alarme falso, mas acha
-  menos insatisfeitas. Na ordenação, empata com a estimativa pura (diferença de Spearman
-  0,00, IC95% [−0,04; +0,04]). Os sinais que mais pesam: a estimativa do Jev e o sentimento
-  médio do cliente ao longo da conversa.
+- Spearman da estimativa do Jev: IC95% [0,64; 0,76] (bootstrap).
+- Ordena bem, mas comprime a escala: quase nunca passa de 4,5.
+- Com quase 300 conversas, o modelo calibrado passa a ganhar também na ordenação (0,76) e
+  erra menos o valor, mas fica conservador: acha só 27 das 76 insatisfeitas, com 5 alarmes
+  falsos. Os sinais que mais pesam são a estimativa do Jev e o sentimento médio do cliente.
+
+**Por tradutor** (estimativa do Jev): Spearman 0,74 nas 207 do `gpt-5-nano` (IC95%
+0,66–0,80) e 0,63 nas 90 do Mistral (IC95% 0,48–0,75). Diferença +0,11, IC95%
+[−0,03; +0,26]: **inconclusiva**. As conversas das duas partes têm tamanho parecido (~21
+turnos). Para separar tradutor de acaso, o teste certo é traduzir as mesmas conversas com os
+dois modelos e comparar, como foi feito entre chinês e português no piloto.
+
+Na primeira versão desta seção, com 207 conversas (só `gpt-5-nano`): estimativa do Jev
+Spearman 0,74 e 38 de 52 insatisfeitas; modelo calibrado MAE 0,60 e Spearman 0,74.
 
 ## Leitura
 
-- **Sem treino, a estimativa do Jev ordena bem as conversas em português** (Spearman 0,74) e
-  acha 73% das insatisfeitas, com cerca de 1 alarme falso para cada 2 acertos.
-- **Calibrar com notas reais compensa no valor, não na ordem.** Com 200 conversas, o modelo
-  calibrado acerta melhor o número, mas fica conservador. Use a estimativa pura para triagem
-  (achar insatisfeitos) e o calibrado quando precisar do número.
+- **Sem treino, a estimativa do Jev ordena bem as conversas em português** (Spearman 0,71) e
+  acha 71% das insatisfeitas, com cerca de 1 alarme falso para cada 2 acertos.
+- **Calibrar com notas reais compensa** no valor e, com ~300 conversas, também na ordem; mas o
+  modelo calibrado fica conservador. Use a estimativa pura para triagem (achar insatisfeitos)
+  e o calibrado quando precisar do número.
 - Limites: conversas traduzidas do chinês, não PT-BR nativo; nota de anotador, não do cliente;
   amostra estratificada (na vida real há bem menos insatisfeitos, e a precisão cai).
 
@@ -90,5 +100,5 @@ O piloto em chinês rodou antes de as perguntas por turno ganharem a frase sobre
 
 ## Próximo passo
 
-Terminar a tradução das 95 conversas restantes (`translate.py` retoma de onde parou) e repetir
-com conversas reais em PT-BR com a nota da pesquisa, quando houver.
+Separar o efeito do tradutor (mesmas conversas, dois tradutores) e repetir com conversas reais
+em PT-BR com a nota da pesquisa, quando houver.
